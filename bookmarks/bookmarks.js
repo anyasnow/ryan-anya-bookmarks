@@ -1,78 +1,78 @@
 const express = require('express')
-const bookmarkRouter = express.Router()
-const uuid = require('uuid/v4')
+const xss = require('xss')
 const logger = require('./logger.js')
-const bookmarks = require('../src/store.js');
-const bodyParser = express.json();
+const BookmarksService = require('../src/bookmarks-service')
 
+const bookmarkRouter = express.Router()
+const jsonParser = express.json();
 
-bookmarkRouter
-    .route('/bookmarks')
-    .get((req, res) => {
-            res.json(bookmarks);
-    })
-    .post(bodyParser, (req, res) => {
-        const { title, url } = req.body;
-        if (!title) {
-            logger.error(`Title is required`);
-            return res
-                .status(400)
-                .send('missing title');
-        }
-
-        // get an id
-        const id = uuid();
-
-        const bookmark = {
-            id,
-            title,
-            url
-        };
-
-        bookmarks.push(bookmark);
-
-        logger.info(`Bookmark with id ${id} created`);
-
-        res
-            .status(201)
-            .location(`http://localhost:8000/bookmarks/${id}`)
-            .json(bookmarks)
-        });
-    
-
-bookmarkRouter
-    .route('/bookmarks/:id')
-    .get((req, res) => {const { id } = req.params;
-  const bookmark = bookmarks.find(book => book.id == id);
-
-  // make sure we found a bookmark
-  if (!bookmark) {
-    logger.error(`Bookmark with id ${id} not found.`);
-    return res
-      .status(404)
-      .send('Bookmark Not Found');
-  }
-
-  res.json(bookmark);
+const serializeBookmark = bookmark => ({
+    ...bookmark,
+    title: xss(bookmark.title),
+    url: xss(bookmark.url),
+    description: xss(bookmark.description)
 })
 
-    .delete((req, res) => {
-        const { id } = req.params;
-        const bookmarkIndex = bookmarks.findIndex(item => item.id == id);
-
-        if (bookmarkIndex === -1) {
-            logger.error(`List with id ${id} not found.`);
-            return res
-                .status(404)
-                .send('Not Found');
-        }
-
-        bookmarks.splice(bookmarkIndex, 1);
-
-        logger.info(`List with id ${id} deleted.`);
-        res
-            .status(204)
-            .end();
+bookmarkRouter.route('/')
+    .get((req, res, next) => {
+        BookmarksService.getAllBookmarks(req.app.get('db'))
+        .then(bookmarks => {
+            res.json(bookmarks.map(serializeBookmark))
         })
+        .catch(next)
+    })
+    .post(jsonParser, (req, res, next) => {
+        const { title, url, description, rating } = req.body
+        const newBookmark = { title, url, description, rating }
+
+        for (const [key, value] of Object.entries(newBookmark))
+            if (value == null)
+                return res.status(400).json({
+                    error: { message: `Missing '${key}' in request body` }
+                })
+
+        BookmarksService.insertBookmark(
+            req.app.get('db'),
+            newBookmark
+        )
+            .then(bookmark => {
+                res
+                    .status(201)
+                    .location(`/bookmarks/${bookmark.id}`)
+                    .json(serializeBookmark(bookmark))
+            })
+        .catch(next)
+    })
+
+bookmarkRouter.route('/:bookmark_id')
+    .all((req, res, next) => {
+        BookmarksService.getById(
+            req.app.get('db'),
+            req.params.bookmark_id
+        )
+        .then(bookmark => {
+            if (!bookmark) {
+              return res.status(404).json({
+                error: { message: `Bookmark doesn't exist` }
+              })
+            }
+            res.bookmark = bookmark
+            next()
+          })
+        .catch(next)
+    })
+    .get((req, res, next) => {
+        res.json(serializeBookmark(res.bookmark))
+    })
+    .delete((req, res, next) => {
+        BookmarksService.deleteBookmark(
+            req.app.get('db'),
+            req.params.bookmark_id
+        )
+            .then(() => {
+                res.status(204).end()
+            })
+            .catch(next)
+    })
 
 module.exports = bookmarkRouter

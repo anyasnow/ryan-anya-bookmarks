@@ -22,6 +22,13 @@ const BookmarksService = {
             .then(rows => {
                 return rows[0]
             })
+    },
+
+    updateBookmark(knex, id, newBookmarkFields) {
+        return knex
+            .from('bookmarks')
+            .where({ id })
+            .update(newBookmarkFields)
     }
 }
 

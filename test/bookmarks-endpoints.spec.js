@@ -218,4 +218,90 @@ describe(`Bookmarks App`, () => {
         })
     })
 
+    describe.only(`PATCH /api/bookmarks/:bookmark_id`, () => {
+        context(`Given no bookmarks`, () => {
+            it(`Responds with 404`, () => {
+                const bookmark_id = 12345
+                return supertest(app)
+                    .patch(`/api/bookmarks/${bookmark_id}`)
+                    .set('Authorization', 'Bearer ' + process.env.API_TOKEN)
+                    .expect(404, { error: { message: `Bookmark doesn't exist` } })
+            })
+        })
+
+        context(`Given there are bookmarks in the database`, () => {
+            const testBookmarks = makeBookmarksArray()
+
+            beforeEach('insert bookmark', () => {
+                return db
+                    .into('bookmarks')
+                    .insert(testBookmarks)
+            })
+
+            it(`Responds with 204 and updates the bookmark`, () => {
+                const idToUpdate = 2
+                const updateBookmark = {
+                    title: `updated bookmark title`,
+                    url: `new-bookmark.com`,
+                    description: `updated bookmark description`,
+                    rating: 2
+                }
+                const expectedBookmark = {
+                    ...testBookmarks[idToUpdate - 1],
+                    ...updateBookmark
+                }
+                return supertest(app)
+                    .patch(`/api/bookmarks/${idToUpdate}`)
+                    .set('Authorization', 'Bearer ' + process.env.API_TOKEN)
+                    .send(updateBookmark)
+                    .expect(204)
+                    .then(res => {
+                        supertest(app)
+                            .get(`/api/bookmarks/${idToUpdate}`)
+                            .expect(expectedBookmark)
+                    })
+            })
+            it(`Responds with a 400 when no required fields are supplied`, () => {
+                const idToUpdate = 2
+                return supertest(app)
+                    .patch(`/api/bookmarks/${idToUpdate}`)
+                    .set('Authorization', 'Bearer ' + process.env.API_TOKEN)
+                    .send({ fieldToIgnore: 'should not be in GET response' })
+                    .expect(400, {
+                        error: {
+                            message: `Request body must contain either 'title', 'url', 'description' or 'rating'`
+                        }
+                    })
+            })
+
+            it(`respond with 204 when updating only a subset of fields`, () => {
+                const idToUpdate = 2;
+                const updateBookmark = {
+                    title: 'updated bookmark title'
+                }
+                const expectedBookmark = {
+                    ...testBookmarks[idToUpdate - 1],
+                    ...updateBookmark
+                }
+
+                return supertest(app)
+                    .patch(`/api/bookmarks/${idToUpdate}`)
+                    .set('Authorization', 'Bearer ' + process.env.API_TOKEN)
+                    .send({
+                        ...updateBookmark,
+                        fieldToIgnore: 'should not be in GET response'
+                    })
+                    .expect(204)
+                    .then(res =>
+                        supertest(app)
+                            .get(`/api/bookmarks/${idToUpdate}`)
+                            .set('Authorization', 'Bearer ' + process.env.API_TOKEN)
+                            .expect(expectedBookmark)
+                    )
+            })
+        })
+
+
+    })
+
 })

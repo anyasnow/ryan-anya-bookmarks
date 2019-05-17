@@ -1,6 +1,6 @@
 const express = require('express')
 const xss = require('xss')
-const logger = require('./logger.js')
+const path = require('path')
 const BookmarksService = require('../src/bookmarks-service')
 
 const bookmarkRouter = express.Router()
@@ -16,10 +16,10 @@ const serializeBookmark = bookmark => ({
 bookmarkRouter.route('/')
     .get((req, res, next) => {
         BookmarksService.getAllBookmarks(req.app.get('db'))
-        .then(bookmarks => {
-            res.json(bookmarks.map(serializeBookmark))
-        })
-        .catch(next)
+            .then(bookmarks => {
+                res.json(bookmarks.map(serializeBookmark))
+            })
+            .catch(next)
     })
     .post(jsonParser, (req, res, next) => {
         const { title, url, description, rating } = req.body
@@ -38,10 +38,10 @@ bookmarkRouter.route('/')
             .then(bookmark => {
                 res
                     .status(201)
-                    .location(`/bookmarks/${bookmark.id}`)
+                    .location(path.posix.join(req.originalUrl, `/${bookmark.id}`))
                     .json(serializeBookmark(bookmark))
             })
-        .catch(next)
+            .catch(next)
     })
 
 bookmarkRouter.route('/:bookmark_id')
@@ -50,16 +50,16 @@ bookmarkRouter.route('/:bookmark_id')
             req.app.get('db'),
             req.params.bookmark_id
         )
-        .then(bookmark => {
-            if (!bookmark) {
-              return res.status(404).json({
-                error: { message: `Bookmark doesn't exist` }
-              })
-            }
-            res.bookmark = bookmark
-            next()
-          })
-        .catch(next)
+            .then(bookmark => {
+                if (!bookmark) {
+                    return res.status(404).json({
+                        error: { message: `Bookmark doesn't exist` }
+                    })
+                }
+                res.bookmark = bookmark
+                next()
+            })
+            .catch(next)
     })
     .get((req, res, next) => {
         res.json(serializeBookmark(res.bookmark))

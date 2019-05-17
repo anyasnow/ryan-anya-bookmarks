@@ -30,7 +30,7 @@ app.use(cors())
 app.use(helmet())
 app.use(express.json())
 
-app.use('/bookmarks', bookmarkRouter)
+app.use('/api/bookmarks', bookmarkRouter)
 
 app.use(function errorHandler(error, req, res, next) {
   let response
